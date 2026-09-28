@@ -1,0 +1,168 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ChatSpace</title>
+<style>
+:root{--bg:#0B0B0F;--bg2:#111118;--bg3:#18181F;--fg:#fff;--mut:#9a9aab;--ac:#7C3AED;--ac2:#8B5CF6;--ac3:#A78BFA;--bd:rgba(255,255,255,.08);--ok:#22c55e}
+*{box-sizing:border-box;margin:0}html,body{height:100%}body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;overflow-x:hidden}
+button,input,textarea,select{font:inherit;color:inherit}a{color:var(--ac3);text-decoration:none}
+.btn{background:var(--ac);border:0;padding:9px 16px;border-radius:10px;cursor:pointer;transition:.15s}.btn:hover{background:var(--ac2)}.btn:disabled{opacity:.5}
+.btn.ghost{background:var(--bg3);border:1px solid var(--bd)}.btn.danger{background:#dc2626}
+input,textarea,select{width:100%;background:var(--bg3);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;outline:0}input:focus,textarea:focus{border-color:var(--ac)}
+label{display:block;margin:12px 0 4px;color:var(--mut);font-size:13px}
+.card{background:var(--bg2);border:1px solid var(--bd);border-radius:14px;padding:16px}
+.av{width:36px;height:36px;border-radius:50%;background:var(--ac);display:grid;place-items:center;font-weight:600;flex:none;object-fit:cover;overflow:hidden}
+.center{min-height:100%;display:grid;place-items:center;padding:20px}.narrow{width:100%;max-width:400px}
+#app{height:100%}.shell{display:flex;height:100%}
+.side{width:230px;background:var(--bg2);border-right:1px solid var(--bd);padding:16px;display:flex;flex-direction:column;gap:4px;flex:none}
+.side a{padding:10px 12px;border-radius:10px;color:var(--fg);cursor:pointer}.side a:hover,.side a.on{background:var(--bg3);color:var(--ac3)}
+.logo{font-weight:700;font-size:20px;margin-bottom:12px;color:var(--ac3)}.grow{flex:1}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}.top{display:flex;gap:10px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--bd)}
+.page{padding:20px;overflow:auto;flex:1}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:16px 0}.stats b{font-size:24px;display:block}
+.tag{font-size:12px;color:var(--mut)}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#555;margin-right:6px}.dot.on{background:var(--ok)}
+.row{display:flex;gap:10px;align-items:center}.wrap{flex-wrap:wrap}
+.room{display:flex;flex-direction:column;height:100%;min-width:0;flex:1}.rhead{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--bd)}
+.rbody{display:flex;flex:1;min-height:0}.chat{flex:1;display:flex;flex-direction:column;min-width:0}
+.msgs{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px}.msg{display:flex;gap:10px;max-width:85%}.msg.me{align-self:flex-end;flex-direction:row-reverse}
+.bub{background:var(--bg3);border-radius:12px;padding:8px 12px;word-break:break-word;white-space:pre-wrap}.me .bub{background:#2a1a52}
+.meta{font-size:12px;color:var(--mut)}.reply{border-left:2px solid var(--ac);padding-left:8px;color:var(--mut);font-size:13px}
+.compose{display:flex;gap:8px;padding:12px;border-top:1px solid var(--bd)}.compose input{flex:1}
+.panel{width:260px;background:var(--bg2);border-left:1px solid var(--bd);padding:14px;overflow:auto;flex:none}
+.panel h4{font-size:12px;color:var(--mut);letter-spacing:.08em;margin:12px 0 6px}.mem{display:flex;gap:8px;align-items:center;padding:4px 0}
+.speak{box-shadow:0 0 0 3px var(--ok);transition:box-shadow .15s}
+#toasts{position:fixed;top:14px;right:14px;display:flex;flex-direction:column;gap:8px;z-index:99}.toast{background:var(--bg3);border:1px solid var(--bd);border-left:3px solid var(--ac);padding:10px 14px;border-radius:10px;animation:in .2s}
+.toast.err{border-left-color:#ef4444}@keyframes in{from{opacity:0;transform:translateY(-6px)}}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:grid;place-items:center;z-index:50;padding:16px}.modal .card{width:100%;max-width:420px}
+.bottom{display:none}.empty{text-align:center;padding:50px 10px;color:var(--mut)}
+@media(max-width:800px){.side{display:none}.bottom{display:flex;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--bd);justify-content:space-around;padding:8px;z-index:20}.bottom a{cursor:pointer;padding:6px 10px;font-size:13px}
+.page{padding-bottom:70px}.panel{position:fixed;right:0;top:0;bottom:0;z-index:30;transform:translateX(100%);transition:.2s;width:80%;max-width:300px}.panel.open{transform:none}.msg{max-width:95%}.room-full .bottom{display:none}}
+</style></head><body><div id="app"></div><div id="toasts"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $=(s,e=document)=>e.querySelector(s),app=$('#app');let me=null,stats={},sock=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(t,err){const d=document.createElement('div');d.className='toast'+(err?' err':'');d.textContent=(err?'✕ ':'✓ ')+t;$('#toasts').append(d);setTimeout(()=>d.remove(),3500)}
+async function api(m,u,b){const r=await fetch('/api'+u,{method:m,credentials:'same-origin',headers:{'Content-Type':'application/json','X-Requested-With':'ChatSpace'},body:b?JSON.stringify(b):undefined});
+ const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.error||'Request failed.');e.status=r.status;throw e}return j}
+const av=(u,c='')=>u.avatar?`<img class="av ${c}" src="${esc(u.avatar)}" alt="">`:`<div class="av ${c}" data-uid="${u.id}">${esc((u.display_name||u.username||'?')[0].toUpperCase())}</div>`;
+const time=s=>new Date(s.replace(' ','T')+'Z').toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+const debounce=(f,ms=300)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>f(...a),ms)}};
+const go=(p)=>{history.pushState({},'',p);route()};window.onpopstate=route;
+document.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a){e.preventDefault();go(a.dataset.go)}});
+async function busy(btn,label,fn){const t=btn.textContent;btn.disabled=true;btn.textContent=label;try{await fn()}catch(e){toast(e.message,1)}finally{btn.disabled=false;btn.textContent=t}}
+function fileToData(f){return new Promise((res,rej)=>{if(!f)return res(null);if(f.size>200000)return rej(new Error('Image must be under 200KB.'));const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)})}
+function modal(html){const m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="card">${html}</div>`;m.onclick=e=>{if(e.target===m)m.remove()};document.body.append(m);return m}
+function connect(){if(sock)return;sock=io();sock.on('notification',n=>toast(n.text));sock.on('removed',d=>{toast('You were removed from a room.',1);if(location.pathname==='/room/'+d.room)go('/rooms')})}
+async function boot(){try{const r=await api('GET','/auth/me');me=r.user;stats=r.stats;connect()}catch{me=null}route()}
+function nav(active){const items=[['/dashboard','Dashboard'],['/rooms','Chat Rooms'],['/rooms/create','Create Room'],['/rooms/join','Join Private Room'],['/profile/'+me.username,'My Profile'],['/settings','Settings']];
+ return{side:`<div class="side"><div class="logo">◆ ChatSpace</div>${items.map(i=>`<a data-go="${i[0]}" class="${active===i[0]?'on':''}">${i[1]}</a>`).join('')}<div class="grow"></div><a id="logout">Logout</a></div>`,
+ bottom:`<div class="bottom">${items.slice(0,4).map(i=>`<a data-go="${i[0]}">${i[1].split(' ')[0]}</a>`).join('')}<a data-go="/settings">More</a></div>`}}
+function shell(active,content,extra=''){const n=nav(active);app.innerHTML=`<div class="shell ${extra}">${n.side}<div class="main">${content}</div></div>${n.bottom}`;const l=$('#logout');if(l)l.onclick=async()=>{await api('POST','/auth/logout');me=null;sock&&sock.disconnect();sock=null;go('/login')}}
+function authPage(mode){const reg=mode==='register';app.innerHTML=`<div class="center"><div class="narrow card"><h2>◆ ChatSpace</h2><p class="tag">${reg?'Create your account':'Welcome back'}</p><form id="f">
+ ${reg?`<label>Username</label><input name="username" required minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+" autocomplete="username"><label>Email</label><input name="email" type="email" required>`:`<label>Username or Email</label><input name="identifier" required autocomplete="username">`}
+ <label>Password</label><input name="password" type="password" required minlength="${reg?8:1}" autocomplete="${reg?'new-password':'current-password'}">${reg?'<label>Confirm Password</label><input name="confirm" type="password" required>':''}
+ <br><button class="btn" style="width:100%">${reg?'Create account':'Login'}</button></form><p class="tag" style="margin-top:12px">${reg?'Have an account? <a data-go="/login">Login</a>':'New here? <a data-go="/register">Register</a>'}</p></div></div>`;
+ $('#f').onsubmit=e=>{e.preventDefault();const b=e.submitter||$('#f button');const d=Object.fromEntries(new FormData(e.target));
+  if(reg&&d.password!==d.confirm)return toast('Passwords do not match.',1);
+  busy(b,reg?'Creating...':'Signing in...',async()=>{await api('POST',reg?'/auth/register':'/auth/login',d);await boot();go('/dashboard')})}}
+function landing(){app.innerHTML=`<div class="center"><div style="text-align:center;max-width:520px"><h1 style="font-size:44px">◆ ChatSpace</h1><p style="color:var(--mut);margin:14px 0 24px">Real-time chat and voice rooms for your communities. Public or private, in one click.</p><div class="row" style="justify-content:center"><button class="btn" data-go="/register">Get started</button><button class="btn ghost" data-go="/login">Login</button></div></div></div>`}
+function roomCard(r){return `<div class="card"><div class="row">${r.avatar?`<img class="av" src="${esc(r.avatar)}">`:`<div class="av">${r.locked?'🔒':esc(r.name[0].toUpperCase())}</div>`}<div><b>${esc(r.name)}</b><div class="tag">${r.type==='private'?'🔒 Private':'Public'} Room · @${esc(r.owner)}</div></div></div>
+ <p class="tag" style="margin:10px 0;min-height:20px">${esc(r.description)}</p><div class="tag">👤 ${r.members} Members · <span class="dot on"></span>${r.online} Online</div><div class="tag">Created ${esc(r.created_at.slice(0,10))}</div>
+ <div style="margin-top:12px">${r.is_member?`<button class="btn" data-go="/room/${r.id}">Open</button>`:r.locked?`<button class="btn ghost" data-join-code="${r.id}">🔒 Enter Code</button>`:`<button class="btn" data-join="${r.id}">Join Room</button>`}</div></div>`}
+function bindCards(root,reload){root.querySelectorAll('[data-join]').forEach(b=>b.onclick=()=>busy(b,'Joining room...',async()=>{await api('POST',`/rooms/${b.dataset.join}/join`);go('/room/'+b.dataset.join)}));
+ root.querySelectorAll('[data-join-code]').forEach(b=>b.onclick=()=>codeModal(b.dataset.joinCode))}
+function codeModal(id){const m=modal(`<h3>Join Private Room</h3><label>Enter Room Code</label><input id="code" placeholder="X7K9-PQ21"><br><br><button class="btn" id="go">Join Room</button>`);
+ $('#go',m).onclick=e=>busy(e.target,'Joining room...',async()=>{const r=await api('POST',id?`/rooms/${id}/join-private`:'/rooms/join-private',{code:$('#code',m).value});m.remove();go('/room/'+r.room.id)})}
+async function roomsList(container,q=''){container.innerHTML='<div class="empty">Loading...</div>';const {rooms}=await api('GET','/rooms?q='+encodeURIComponent(q));
+ container.innerHTML=rooms.length?`<div class="grid">${rooms.map(roomCard).join('')}</div>`:`<div class="empty"><p>No chat rooms yet.</p><p>Create the first room and start chatting.</p><br><button class="btn" data-go="/rooms/create">Create Room</button></div>`;bindCards(container)}
+async function dashboard(){const r=await api('GET','/auth/me');stats=r.stats;
+ shell('/dashboard',`<div class="top"><input id="q" placeholder="Search rooms or users..." style="max-width:420px"></div><div class="page"><h2>Welcome back, @${esc(me.username)}</h2>
+ <div class="stats"><div class="card"><b>${stats.joined}</b>Rooms joined</div><div class="card"><b>${stats.owned}</b>Rooms created</div><div class="card"><b>${stats.online_users}</b>Users online</div><div class="card"><b><span class="dot on"></span>Online</b>Your status</div></div>
+ ${stats.joined?'':'<div class="card" style="margin-bottom:14px">You haven\'t joined any rooms yet. <a data-go="/rooms">Explore Rooms</a></div>'}<div id="users"></div><div id="list"></div></div>`);
+ const list=$('#list');roomsList(list);const search=debounce(async v=>{roomsList(list,v);const u=$('#users');if(v.length<2)return u.innerHTML='';const {users}=await api('GET','/users?q='+encodeURIComponent(v));
+  u.innerHTML=users.length?`<h4 class="tag">USERS</h4><div class="row wrap" style="margin:8px 0 16px">${users.map(x=>`<a class="card row" data-go="/profile/${x.username}">${av(x)}<span>@${esc(x.username)}</span></a>`).join('')}</div>`:''});$('#q').oninput=e=>search(e.target.value.trim())}
+async function roomsPage(){shell('/rooms','<div class="top"><input id="q" placeholder="Search rooms..." style="max-width:420px"></div><div class="page"><div id="list"></div></div>');roomsList($('#list'));$('#q').oninput=debounce(e=>roomsList($('#list'),e.target.value.trim()))}
+function createPage(){shell('/rooms/create',`<div class="page"><div class="card" style="max-width:480px"><h2>Create Chat Room</h2><form id="f"><label>Room Name</label><input name="name" required minlength="2" maxlength="50"><label>Description</label><textarea name="description" rows="3" maxlength="300"></textarea>
+ <label>Room Type</label><select name="type"><option value="public">Public</option><option value="private">Private</option></select><label>Avatar</label><input type="file" name="avatar" accept="image/png,image/jpeg,image/webp"><br><button class="btn">Create Room</button></form></div></div>`);
+ $('#f').onsubmit=e=>{e.preventDefault();busy($('#f button'),'Creating room...',async()=>{const f=e.target;const avatar=await fileToData(f.avatar.files[0]);const {room}=await api('POST','/rooms',{name:f.name.value,description:f.description.value,type:f.type.value,avatar});toast('Room created successfully.');go('/room/'+room.id)})}}
+function joinPage(){shell('/rooms/join',`<div class="page"><div class="card" style="max-width:420px"><h2>Join Private Room</h2><label>Enter Room Code</label><input id="code" placeholder="X7K9-PQ21"><br><br><button class="btn" id="go">Join Room</button></div></div>`);
+ $('#go').onclick=e=>busy(e.target,'Joining room...',async()=>{const r=await api('POST','/rooms/join-private',{code:$('#code').value});go('/room/'+r.room.id)})}
+async function profile(username){let d;try{d=await api('GET','/users/'+username)}catch(e){toast(e.message,1);return go('/dashboard')}const u=d.user;
+ shell('/profile',`<div class="page"><div class="card" style="max-width:380px;text-align:center"><div class="row" style="justify-content:center"><div style="transform:scale(1.8);margin:20px">${av(u)}</div></div><h2>${esc(u.display_name)}</h2><div class="tag">@${esc(u.username)} · ${u.online?'🟢 Online':'⚫ Offline'}</div><p style="margin:10px 0">${esc(u.bio)}</p><div class="tag">Member since ${esc(u.created_at.slice(0,4))}</div><div class="tag">${d.rooms} Rooms · ${d.messages} Messages</div></div></div>`)}
+function settings(){shell('/settings',`<div class="page"><div class="card" style="max-width:480px"><h2>Settings</h2><form id="f"><label>Username (cannot be changed)</label><input value="@${esc(me.username)}" disabled><label>Display Name</label><input name="dn" maxlength="40" value="${esc(me.display_name)}"><label>Bio</label><textarea name="bio" rows="3" maxlength="200">${esc(me.bio)}</textarea><label>Avatar</label><input type="file" name="avatar" accept="image/png,image/jpeg,image/webp"><br><button class="btn">Save profile</button></form>
+ <hr style="border-color:var(--bd);margin:20px 0"><form id="p"><label>Current password</label><input name="c" type="password" required><label>New password</label><input name="n" type="password" minlength="8" required><br><button class="btn ghost">Change password</button></form></div></div>`);
+ $('#f').onsubmit=e=>{e.preventDefault();busy($('#f button'),'Saving...',async()=>{const f=e.target;const avatar=await fileToData(f.avatar.files[0]);const r=await api('PATCH','/users/me',{display_name:f.dn.value,bio:f.bio.value,avatar});me={...me,...r.user};toast('Profile saved.')})};
+ $('#p').onsubmit=e=>{e.preventDefault();busy($('#p button'),'Updating...',async()=>{await api('POST','/users/me/password',{current:e.target.c.value,password:e.target.n.value});e.target.reset();toast('Password changed.')})}}
+// ---- Room + voice
+let cleanup=null;
+async function roomPage(id){let room;try{room=(await api('GET','/rooms/'+id)).room}catch(e){toast(e.message,1);return go('/rooms')}
+ if(!room.is_member){shell('/rooms',`<div class="page"><div class="card" style="max-width:420px;text-align:center"><h2>${room.locked?'🔒 ':''}${esc(room.name)}</h2><p class="tag">${esc(room.description)}</p><p>${room.members} members</p><br>${room.locked?`<button class="btn" id="j">🔒 Enter Code</button>`:`<button class="btn" id="j">Join Room</button>`}</div></div>`);
+  $('#j').onclick=e=>room.locked?codeModal(id):busy(e.target,'Joining room...',async()=>{await api('POST',`/rooms/${id}/join`);roomPage(id)});return}
+ const isOwner=room.role==='owner',canMod=isOwner||room.role==='admin';
+ shell('/rooms',`<div class="room"><div class="rhead"><button class="btn ghost" data-go="/rooms">←</button><div><b>${esc(room.name)}</b> <span class="tag">${room.type==='private'?'🔒 Private':'Public'}</span><div class="tag" id="cnt"></div></div><div class="grow"></div>
+ <button class="btn ghost" id="voiceBtn">🎙 Join Voice</button><button class="btn ghost" id="share">Share</button>${isOwner?'<button class="btn ghost" id="cfg">⚙</button>':''}<button class="btn ghost" id="mtoggle">👥</button></div>
+ <div class="rbody"><div class="chat"><div class="msgs" id="msgs"></div><div class="tag" id="typing" style="padding:0 16px;height:18px"></div><div id="replying" class="reply" style="margin:0 12px"></div><form class="compose" id="cf"><input id="mi" placeholder="Type a message..." maxlength="2000" autocomplete="off"><button class="btn">➤</button></form></div>
+ <div class="panel" id="panel"><h4>VOICE</h4><div id="vp" class="tag">Not connected</div><div id="vctl"></div><h4 id="mh">MEMBERS</h4><div id="ml"></div></div></div></div><div id="audio"></div>`,'room-full');
+ const rid=room.id;let oldest=null,replyTo=null,members=[],loading=false;const box=$('#msgs');
+ sock.emit('join-room',rid);
+ const msgHtml=m=>`<div class="msg ${m.user.id===me.id?'me':''}" data-id="${m.id}">${av(m.user)}<div><div class="meta"><a data-go="/profile/${esc(m.user.username)}">${esc(m.user.display_name)}</a> · ${time(m.created_at)} · <a data-reply="${m.id}" data-u="${esc(m.user.username)}" style="cursor:pointer">Reply</a> <a data-react="${m.id}" style="cursor:pointer">👍</a></div>
+  ${m.reply_to?`<div class="reply">↩ #${m.reply_to}</div>`:''}<div class="bub">${esc(m.message)}</div></div></div>`;
+ async function loadMsgs(before){if(loading)return;loading=true;const {messages}=await api('GET',`/rooms/${rid}/messages`+(before?'?before='+before:''));loading=false;
+  if(messages.length){oldest=messages[0].id;const h=box.scrollHeight;box.insertAdjacentHTML('afterbegin',messages.map(msgHtml).join(''));box.scrollTop=before?box.scrollHeight-h:box.scrollHeight}}
+ box.onscroll=()=>{if(box.scrollTop<40&&oldest)loadMsgs(oldest)};
+ box.onclick=e=>{const r=e.target.closest('[data-reply]');if(r){replyTo=r.dataset.reply;$('#replying').textContent='↩ Replying to @'+r.dataset.u+' (click to cancel)';$('#mi').focus()}
+  const x=e.target.closest('[data-react]');if(x){x.textContent='👍 ✓'}}
+ $('#replying').onclick=()=>{replyTo=null;$('#replying').textContent=''};
+ $('#cf').onsubmit=async e=>{e.preventDefault();const i=$('#mi'),v=i.value.trim();if(!v)return;i.value='';try{await api('POST',`/rooms/${rid}/messages`,{message:v,reply_to:replyTo});replyTo=null;$('#replying').textContent=''}catch(er){toast(er.message,1);i.value=v}};
+ let tt=0;$('#mi').oninput=()=>{if(Date.now()-tt>2000){tt=Date.now();sock.emit('typing',rid)}};
+ const tmr={};const onTyping=d=>{if(d.room!==rid)return;$('#typing').textContent=d.username+' is typing...';clearTimeout(tmr.t);tmr.t=setTimeout(()=>$('#typing').textContent='',2500)};
+ const onMsg=m=>{const near=box.scrollHeight-box.scrollTop-box.clientHeight<120;box.insertAdjacentHTML('beforeend',msgHtml(m));if(near||m.user.id===me.id)box.scrollTop=box.scrollHeight};
+ async function loadMembers(){const r=await api('GET',`/rooms/${rid}/members`);members=r.members;const on=members.filter(m=>m.online);$('#cnt').textContent=`${members.length} members · ${on.length} online`;$('#mh').textContent='MEMBERS — '+members.length;
+  const row=m=>`<div class="mem">${av(m,'')}<a data-go="/profile/${esc(m.username)}" style="flex:1">${esc(m.username)}${m.role!=='member'?' <span class="tag">('+m.role+')</span>':''}${m.voice?' 🎙':''}${m.muted?' 🔇':''}</a>${canMod&&m.id!==me.id&&m.role!=='owner'?`<span class="tag"><a data-mod="mute" data-u="${esc(m.username)}" style="cursor:pointer">Mute</a> <a data-mod="kick" data-u="${esc(m.username)}" style="cursor:pointer">Kick</a> <a data-mod="ban" data-u="${esc(m.username)}" style="cursor:pointer">Ban</a></span>`:''}</div>`;
+  $('#ml').innerHTML=`<h4>ONLINE</h4>${on.map(row).join('')}<h4>OFFLINE</h4>${members.filter(m=>!m.online).map(row).join('')}`}
+ $('#ml').onclick=async e=>{const a=e.target.closest('[data-mod]');if(!a)return;try{await api('POST',`/rooms/${rid}/${a.dataset.mod}`,{username:a.dataset.u});toast('Done.')}catch(er){toast(er.message,1)}};
+ sock.on('typing',onTyping);sock.on('message',onMsg);const refresh=()=>loadMembers().catch(()=>{});sock.on('members-changed',refresh);sock.on('presence',refresh);
+ const onDel=()=>{toast('This room was deleted.',1);go('/rooms')};sock.on('room-deleted',onDel);
+ $('#mtoggle').onclick=()=>$('#panel').classList.toggle('open');
+ $('#share').onclick=()=>{const url=location.origin+'/room/'+rid;const m=modal(`<h3>Share Room</h3><input readonly value="${esc(url)}"><br><br><button class="btn" id="cp">Copy Link</button>${navigator.share?' <button class="btn ghost" id="ns">Share...</button>':''}`);
+  $('#cp',m).onclick=()=>{navigator.clipboard.writeText(url);toast('Link copied.')};const ns=$('#ns',m);if(ns)ns.onclick=()=>navigator.share({title:room.name,url})};
+ if(isOwner)$('#cfg').onclick=()=>{const m=modal(`<h3>Room Settings</h3><label>Name</label><input id="rn" value="${esc(room.name)}"><label>Description</label><textarea id="rd">${esc(room.description)}</textarea><label>Type</label><select id="rt"><option value="public">Public</option><option value="private" ${room.type==='private'?'selected':''}>Private</option></select>
+  <label>Avatar</label><input type="file" id="ra" accept="image/png,image/jpeg,image/webp">${room.room_code?`<label>ROOM CODE</label><div class="row"><input readonly value="${esc(room.room_code)}"><button class="btn ghost" id="cc">Copy</button><button class="btn ghost" id="rg">New</button></div>`:''}<br><div class="row"><button class="btn" id="sv">Save</button><button class="btn danger" id="dl">Delete Room</button></div>`);
+  if(room.room_code){$('#cc',m).onclick=()=>{navigator.clipboard.writeText(room.room_code);toast('Code copied.')};$('#rg',m).onclick=async()=>{try{const r=await api('POST',`/rooms/${rid}/regenerate-code`);room=r.room;m.remove();toast('New code generated.');$('#cfg').click()}catch(er){toast(er.message,1)}}}
+  $('#sv',m).onclick=e=>busy(e.target,'Saving...',async()=>{const avatar=await fileToData($('#ra',m).files[0]);const r=await api('PATCH','/rooms/'+rid,{name:$('#rn',m).value,description:$('#rd',m).value,type:$('#rt',m).value,avatar});m.remove();toast('Room updated.');roomPage(rid)});
+  $('#dl',m).onclick=async()=>{if(confirm('Delete this room permanently?')){try{await api('DELETE','/rooms/'+rid);go('/rooms')}catch(er){toast(er.message,1)}}}};
+ // Voice (WebRTC mesh)
+ let stream=null,inVoice=false,muted=false,peers={},vstate={},ctx=null;const ICE={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+ const renderVoice=()=>{if(!inVoice){$('#vp').textContent='Not connected';$('#vctl').innerHTML='';return}
+  const list=[{id:me.id,username:me.username,...(vstate[me.id]||{})},...Object.values(peers).map(p=>({id:p.userId,username:p.username,...(vstate[p.userId]||{})}))];
+  $('#vp').innerHTML='<div>🟢 Voice Connected</div>'+list.map(p=>`<div class="mem"><div class="av ${p.speaking?'speak':''}">${esc(p.username[0].toUpperCase())}</div><span>${esc(p.username)} ${p.muted?'🔇 Muted':p.speaking?'🎙 Speaking':''}</span></div>`).join('');
+  $('#vctl').innerHTML=`<button class="btn ghost" id="mu">${muted?'Unmute':'Mute'}</button> <button class="btn danger" id="lv">Leave Voice</button>`;
+  $('#mu').onclick=()=>{muted=!muted;stream.getAudioTracks().forEach(t=>t.enabled=!muted);sock.emit('voice-state',{muted,speaking:false});renderVoice()};$('#lv').onclick=leaveVoice}
+ function makePeer(sid,userId,username,initiator){const pc=new RTCPeerConnection(ICE);peers[sid]={pc,userId,username};stream.getTracks().forEach(t=>pc.addTrack(t,stream));
+  pc.onicecandidate=e=>e.candidate&&sock.emit('signal',{to:sid,data:{ice:e.candidate}});
+  pc.ontrack=e=>{let a=document.getElementById('a'+sid);if(!a){a=document.createElement('audio');a.id='a'+sid;a.autoplay=true;$('#audio').append(a)}a.srcObject=e.streams[0]};
+  if(initiator)pc.createOffer().then(o=>pc.setLocalDescription(o)).then(()=>sock.emit('signal',{to:sid,data:{sdp:pc.localDescription}}));renderVoice();return pc}
+ const dropPeer=sid=>{const p=peers[sid];if(!p)return;p.pc.close();delete peers[sid];const a=document.getElementById('a'+sid);a&&a.remove()};
+ async function joinVoice(){if(inVoice)return;const b=$('#voiceBtn');b.textContent='Connecting voice...';
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}})}catch{b.textContent='🎙 Join Voice';return toast('Microphone access denied.',1)}
+  sock.emit('voice-join',rid,res=>{if(res.error){stream.getTracks().forEach(t=>t.stop());b.textContent='🎙 Join Voice';return toast(res.error,1)}
+   inVoice=true;muted=false;b.textContent='Leave Voice';$('#panel').classList.add('open');res.peers.forEach(p=>{if(p.sid!==sock.id)makePeer(p.sid,p.userId,p.username,true)});renderVoice();refresh();startMeter()})}
+ function startMeter(){ctx=new AudioContext();const an=ctx.createAnalyser();an.fftSize=512;ctx.createMediaStreamSource(stream).connect(an);const buf=new Uint8Array(an.frequencyBinCount);let last=false;
+  ctx._iv=setInterval(()=>{an.getByteFrequencyData(buf);const sp=!muted&&buf.reduce((a,b)=>a+b,0)/buf.length>18;if(sp!==last){last=sp;sock.emit('voice-state',{muted,speaking:sp})}},150)}
+ function leaveVoice(){if(!inVoice)return;sock.emit('voice-leave');inVoice=false;stream&&stream.getTracks().forEach(t=>t.stop());ctx&&(clearInterval(ctx._iv),ctx.close());Object.keys(peers).forEach(dropPeer);vstate={};$('#voiceBtn').textContent='🎙 Join Voice';renderVoice();refresh()}
+ $('#voiceBtn').onclick=()=>inVoice?leaveVoice():joinVoice();
+ const onSignal=async({from,userId,data})=>{if(!inVoice)return;let p=peers[from];if(data.sdp){if(!p){const u=members.find(m=>m.id===userId);p={pc:makePeer(from,userId,u?u.username:'user',false)};}
+   await peers[from].pc.setRemoteDescription(data.sdp);if(data.sdp.type==='offer'){const a=await peers[from].pc.createAnswer();await peers[from].pc.setLocalDescription(a);sock.emit('signal',{to:from,data:{sdp:peers[from].pc.localDescription}})}}
+  else if(data.ice&&peers[from])try{await peers[from].pc.addIceCandidate(data.ice)}catch{}};
+ sock.on('signal',onSignal);
+ sock.on('voice-joined',()=>refresh());
+ sock.on('voice-left',d=>{Object.entries(peers).forEach(([sid,p])=>p.userId===d.userId&&dropPeer(sid));delete vstate[d.userId];renderVoice();refresh()});
+ sock.on('voice-state',d=>{vstate[d.userId]={muted:d.muted,speaking:d.speaking};if(inVoice)renderVoice()});
+ sock.on('voice-kicked',()=>{leaveVoice();toast('Removed from voice.',1)});
+ cleanup=()=>{leaveVoice();sock.emit('leave-room',rid);['typing','message','members-changed','presence','room-deleted','signal','voice-joined','voice-left','voice-state','voice-kicked'].forEach(ev=>sock.off(ev))};
+ await loadMsgs();loadMembers()}
+function route(){if(cleanup){cleanup();cleanup=null}const p=location.pathname;
+ if(!me){if(p==='/register')return authPage('register');if(p==='/login')return authPage('login');if(p==='/')return landing();return go('/login')}
+ if(p==='/login'||p==='/register'||p==='/')return go('/dashboard');
+ if(p==='/dashboard')return dashboard();if(p==='/rooms')return roomsPage();if(p==='/rooms/create')return createPage();if(p==='/rooms/join')return joinPage();
+ if(p.startsWith('/room/'))return roomPage(p.split('/')[2]);if(p.startsWith('/profile/'))return profile(p.split('/')[2]);if(p==='/settings')return settings();go('/dashboard')}
+boot();
+</script></body></html>
